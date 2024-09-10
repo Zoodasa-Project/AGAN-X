@@ -3,7 +3,15 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
-from config import RAW_DATA_DIR, PROCESSED_DATA_DIR, BATCH_SIZE, UPSCALE_FACTOR
+from config import RAW_DATA_DIR, PROCESSED_DATA_DIR, BATCH_SIZE, UPSCALE_FACTOR, DEVICE
+from torchvision import transforms
+
+augmentation_transforms = transforms.Compose([
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(10),
+    transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+])
+
 
 class AnimeDataset(Dataset):
     def __init__(self, root_dir, transform=None):
@@ -20,6 +28,7 @@ class AnimeDataset(Dataset):
         
         if self.transform:
             image = self.transform(image)
+            image = augmentation_transforms(image)  # 데이터 증강 적용
         
         # 고해상도 이미지
         target = image
