@@ -9,6 +9,19 @@ from utils.data_loader import AnimeDataset, get_data_loaders
 from utils.image_processing import save_image, plot_comparison, calculate_psnr
 from config import *
 import time
+import os
+
+def create_directories():
+    directories = ['samples', 'models', 'data/raw', 'data/processed']
+    for directory in directories:
+        try:
+            os.makedirs(directory, exist_ok=True)
+            print(f"Directory '{directory}' created or already exists.")
+        except Exception as e:
+            print(f"Error creating directory '{directory}': {str(e)}")
+
+# 학습 함수 시작 전에 호출
+create_directories()
 
 def train():
     # 데이터 로더 초기화
