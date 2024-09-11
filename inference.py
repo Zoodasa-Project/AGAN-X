@@ -1,60 +1,44 @@
 import torch
 from torchvision import transforms
 from PIL import Image
-import argparse
-from models.generator import Generator
-from utils.image_processing import save_image, plot_comparison
-from config import DEVICE, GENERATOR_PATH, UPSCALE_FACTOR
+from models.upscaler import AdvancedAnimeUpscaler
+from config import CONFIG
 
-def load_image(image_path):
-    img = Image.open(image_path).convert('RGB')
-    return img
-
-def preprocess_image(img):
+def load_image(image_path, image_size):
     transform = transforms.Compose([
-        transforms.Resize((img.size[1] // UPSCALE_FACTOR, img.size[0] // UPSCALE_FACTOR)),  # 입력 이미지 크기 조정
+        transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
-    return transform(img).unsqueeze(0)
+    image = Image.open(image_path).convert('RGB')
+    return transform(image).unsqueeze(0)
 
-def postprocess_image(tensor):
-    # [-1, 1] 범위에서 [0, 1] 범위로 변환
-    tensor = (tensor + 1) / 2.0
-    # 값을 0과 1 사이로 클리핑
-    tensor = torch.clamp(tensor, 0, 1)
-    return tensor
+def save_image(tensor, filename):
+    tensor = tensor.squeeze().cpu().float().numpy()
+    tensor = (tensor + 1) / 2.0 * 255.0
+    tensor = tensor.clip(0, 255).astype("uint8")
+    tensor = tensor.transpose(1, 2, 0)
+    image = Image.fromarray(tensor)
+    image.save(filename)
 
-def upscale_image(model, img_tensor):
-    with torch.no_grad():
-        output = model(img_tensor.to(DEVICE))
-    return postprocess_image(output.cpu().squeeze(0))
-
-def main(input_path, output_path):
-    # 모델 로드
-    model = Generator().to(DEVICE)
-    model.load_state_dict(torch.load(GENERATOR_PATH, map_location=DEVICE))
+def upscale_image(model, image_path, output_path):
     model.eval()
-
-    # 이미지 로드 및 전처리
-    img = load_image(input_path)
-    img_tensor = preprocess_image(img)
-
-    # 업스케일링 수행
-    upscaled_img = upscale_image(model, img_tensor)
-
-    # 결과 저장
-    save_image(upscaled_img, output_path)
-
-    # 원본과 업스케일링된 이미지 비교 플롯
-    plot_comparison(img_tensor.squeeze(0), transforms.ToTensor()(img), upscaled_img)
-
-    print(f"Upscaled image saved to {output_path}")
+    with torch.no_grad():
+        input_image = load_image(image_path, CONFIG['image_size']).to(CONFIG['device'])
+        t = torch.zeros(1, dtype=torch.long, device=CONFIG['device'])
+        upscaled_image = model(input_image, t)
+        save_image(upscaled_image, output_path)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Upscale an image using the trained model.")
-    parser.add_argument("input_path", type=str, help="Path to the input low resolution image.")
-    parser.add_argument("output_path", type=str, help="Path to save the upscaled image.")
-    args = parser.parse_args()
-
-    main(args.input_path, args.output_path)
+    model = AdvancedAnimeUpscaler(
+        CONFIG['image_size'], CONFIG['patch_size'], CONFIG['num_classes'],
+        CONFIG['dim'], CONFIG['depth'], CONFIG['heads'], CONFIG['mlp_dim']
+    ).to(CONFIG['device'])
+    
+    model.load_state_dict(torch.load("checkpoint_epoch_1000.pth"))
+    
+    input_image_path = "input_image.jpg"
+    output_image_path = "upscaled_image.png"
+    
+    upscale_image(model, input_image_path, output_image_path)
+    print(f"Upscaled image saved to {output_image_path}")
